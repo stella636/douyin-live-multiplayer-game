@@ -1,15 +1,15 @@
 import Phaser from "phaser";
-import { GAME_CONFIG } from "@douyin-game/shared";
-import { GameScene } from "./scenes/GameScene";
+import { RUNNER_CONFIG } from "@douyin-game/shared";
+import { RunnerScene } from "./scenes/RunnerScene";
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game-layer",
-  width: GAME_CONFIG.mapWidth,
-  height: GAME_CONFIG.mapHeight,
+  width: RUNNER_CONFIG.viewportWidth,
+  height: RUNNER_CONFIG.viewportHeight,
   backgroundColor: "rgba(0,0,0,0)",
   transparent: true,
-  scene: [GameScene]
+  scene: [RunnerScene]
 });
 
 window.addEventListener("beforeunload", () => {
