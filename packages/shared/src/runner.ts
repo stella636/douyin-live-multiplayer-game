@@ -21,7 +21,8 @@ export const RUNNER_CONFIG = {
   playerScreenX: 190,
   roundDurationMs: 90_000,
   shieldDurationMs: 3000,
-  bridgeDurationMs: 6000
+  bridgeDurationMs: 6000,
+  maxReviveCharges: 2
 } as const;
 
 export type RunnerPlatform = {
@@ -59,6 +60,15 @@ export const RUNNER_RULES = {
   winCondition: "reach-goal-before-timeout",
   layout: "portrait-live-camera-top-game-middle-danmu-bottom",
   controls: "camera-jump-or-space",
-  giftBridge: "Digit1 / rose gift",
-  giftShield: "Digit2 / heart gift"
+  giftBridge: "玫瑰 rose / 1 → 前方架桥",
+  giftShield: "小心心 heart / 2 → 护盾 3 秒",
+  giftRevive: "钻石 diamond / 3 → 复活 +1"
 } as const;
+
+export const RUNNER_GIFT_EFFECTS = {
+  rose: "bridge",
+  heart: "shield",
+  diamond: "revive"
+} as const;
+
+export type RunnerGiftEffect = (typeof RUNNER_GIFT_EFFECTS)[keyof typeof RUNNER_GIFT_EFFECTS];

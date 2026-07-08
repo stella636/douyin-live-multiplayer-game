@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Client, Room } from "colyseus.js";
-import { RUNNER_CONFIG, type RunnerBlock, type RunnerLevel, type RunnerPlatform } from "@douyin-game/shared";
+import { RUNNER_CONFIG, RUNNER_GIFT_EFFECTS, type RunnerBlock, type RunnerLevel, type RunnerPlatform } from "@douyin-game/shared";
 import { PoseJumpController } from "../camera/PoseJumpController";
 import { LEVEL_1 } from "../runner/level1";
 import {
@@ -45,6 +45,7 @@ export class RunnerScene extends Phaser.Scene {
   private status: RunStatus = "playing";
   private coins = 0;
   private shieldUntil = 0;
+  private reviveCharges = 0;
   private startedAt = 0;
   private scrollX = 0;
 
@@ -91,19 +92,25 @@ export class RunnerScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-SPACE", () => this.bufferJump());
     this.input.keyboard?.on("keydown-UP", () => this.bufferJump());
     this.input.keyboard?.on("keydown-W", () => this.bufferJump());
-    this.input.keyboard?.on("keydown-ONE", () => void this.triggerGift("bridge"));
-    this.input.keyboard?.on("keydown-TWO", () => void this.triggerGift("shield"));
+    this.input.keyboard?.on("keydown-ONE", () => void this.triggerGift("rose"));
+    this.input.keyboard?.on("keydown-TWO", () => void this.triggerGift("heart"));
+    this.input.keyboard?.on("keydown-THREE", () => void this.triggerGift("diamond"));
 
     try {
       const client = new Client(import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567");
       this.room = await client.joinOrCreate("gift-box-battle", { name: this.playerName });
-      this.room.onMessage("gift:applied", () => this.applyShield());
+      this.room.onMessage("gift:applied", (payload: { giftName?: string; gain?: number }) => {
+        const giftType = this.inferGiftType(payload.giftName);
+        if (giftType) {
+          this.applyRunnerGift(giftType, `观众送礼：${payload.giftName ?? giftType}`);
+        }
+      });
     } catch {
-      this.showToast("离线模式：1架桥 2护盾");
+      this.showToast("离线模式：1架桥 2护盾 3复活");
     }
 
     await this.setupCameraPreview();
-    this.showToast("自动前进！摄像头起跳或 Space");
+    this.showToast("竖屏跑酷！跳起顶砖块，礼物可救场");
   }
 
   update(_time: number, delta: number) {
@@ -254,6 +261,9 @@ export class RunnerScene extends Phaser.Scene {
     }
 
     if (this.playerY > RUNNER_CONFIG.viewportHeight + 60) {
+      if (this.tryRevive("掉进坑里")) {
+        return;
+      }
       this.lose("掉进坑里！按 R 重开");
       return;
     }
@@ -342,6 +352,9 @@ export class RunnerScene extends Phaser.Scene {
         top: obstacle.y,
         bottom: obstacle.y + obstacle.height
       })) {
+        if (this.tryRevive(obstacle.kind === "spike" ? "碰到尖刺" : "撞上障碍")) {
+          return;
+        }
         this.lose(obstacle.kind === "spike" ? "碰到尖刺！按 R 重开" : "撞上木桩！按 R 重开");
         return;
       }
@@ -411,14 +424,8 @@ export class RunnerScene extends Phaser.Scene {
     this.jumpBufferedAt = performance.now();
   }
 
-  private async triggerGift(kind: "bridge" | "shield") {
-    if (kind === "bridge") {
-      this.spawnBridge();
-      this.showToast("🌉 礼物架桥");
-    } else {
-      this.applyShield();
-      this.showToast("🛡️ 礼物护盾");
-    }
+  private async triggerGift(giftType: "rose" | "heart" | "diamond") {
+    this.applyRunnerGift(giftType, `调试礼物：${giftType}`);
 
     if (!this.room) {
       return;
@@ -431,12 +438,79 @@ export class RunnerScene extends Phaser.Scene {
         roomId: this.room.roomId,
         command: {
           senderId: this.room.sessionId,
-          giftType: kind === "bridge" ? "rose" : "heart",
+          giftType,
           giftCount: 1,
           targetPlayerId: this.room.sessionId
         }
       })
     }).catch(() => undefined);
+  }
+
+  private inferGiftType(giftName?: string): keyof typeof RUNNER_GIFT_EFFECTS | null {
+    if (!giftName) {
+      return null;
+    }
+    const lower = giftName.toLowerCase();
+    if (lower.includes("rose") || lower.includes("玫瑰")) {
+      return "rose";
+    }
+    if (lower.includes("heart") || lower.includes("心")) {
+      return "heart";
+    }
+    if (lower.includes("diamond") || lower.includes("钻")) {
+      return "diamond";
+    }
+    return null;
+  }
+
+  private applyRunnerGift(giftType: keyof typeof RUNNER_GIFT_EFFECTS, toastPrefix: string) {
+    const effect = RUNNER_GIFT_EFFECTS[giftType];
+    if (effect === "bridge") {
+      this.spawnBridge();
+      this.showGiftBanner(`${toastPrefix} → 架桥救场`);
+    } else if (effect === "shield") {
+      this.applyShield();
+      this.showGiftBanner(`${toastPrefix} → 护盾 3 秒`);
+    } else {
+      this.reviveCharges = Math.min(RUNNER_CONFIG.maxReviveCharges, this.reviveCharges + 1);
+      this.showGiftBanner(`${toastPrefix} → 复活 +1（${this.reviveCharges}）`);
+    }
+  }
+
+  private tryRevive(reason: string) {
+    if (performance.now() < this.shieldUntil) {
+      return true;
+    }
+    if (this.reviveCharges <= 0) {
+      return false;
+    }
+    this.reviveCharges -= 1;
+    this.playerY = RUNNER_CONFIG.groundY - RUNNER_CONFIG.playerHeight;
+    this.playerX += 40;
+    this.vy = 0;
+    this.applyShield();
+    this.showGiftBanner(`复活救场！${reason}（剩余 ${this.reviveCharges}）`);
+    this.cameras.main.flash(280, 120, 200, 255, false);
+    return true;
+  }
+
+  private showGiftBanner(message: string) {
+    this.showToast(message);
+    const banner = this.add.text(RUNNER_CONFIG.viewportWidth / 2, 88, message, {
+      fontFamily: "Arial",
+      fontSize: "16px",
+      color: "#fef08a",
+      backgroundColor: "#be123ccc",
+      padding: { left: 12, right: 12, top: 6, bottom: 6 }
+    }).setOrigin(0.5).setDepth(130).setScrollFactor(0);
+    this.tweens.add({
+      targets: banner,
+      y: 72,
+      alpha: 0,
+      duration: 1600,
+      ease: "Quad.easeOut",
+      onComplete: () => banner.destroy()
+    });
   }
 
   private spawnBridge() {
@@ -484,7 +558,10 @@ export class RunnerScene extends Phaser.Scene {
     const elapsed = Math.floor((performance.now() - this.startedAt) / 1000);
     const timeLeft = Math.max(0, Math.ceil(RUNNER_CONFIG.roundDurationMs / 1000) - elapsed);
     const progress = Math.min(100, Math.round((this.playerX / this.level.goalX) * 100));
-    this.hud?.setText(`🍁${this.level.name}  ${progress}%  💰${this.coins}  ⏱${timeLeft}s  ${this.cameraJumpDown ? "起跳!" : "跑"}`);
+    const shieldLeft = Math.max(0, Math.ceil((this.shieldUntil - performance.now()) / 1000));
+    this.hud?.setText(
+      `🍁${this.level.name}  ${progress}%  💰${this.coins}  ⏱${timeLeft}s  🛡${shieldLeft > 0 ? shieldLeft + "s" : "-"}  ❤${this.reviveCharges}`
+    );
   }
 
   private async setupCameraPreview() {
