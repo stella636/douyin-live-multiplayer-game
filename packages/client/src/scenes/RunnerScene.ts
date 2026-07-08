@@ -1,8 +1,15 @@
 import Phaser from "phaser";
 import { Client, Room } from "colyseus.js";
-import { RUNNER_CONFIG, RUNNER_RULES, type RunnerBlock, type RunnerLevel, type RunnerObstacle, type RunnerPlatform } from "@douyin-game/shared";
+import { RUNNER_CONFIG, type RunnerBlock, type RunnerLevel, type RunnerPlatform } from "@douyin-game/shared";
 import { PoseJumpController } from "../camera/PoseJumpController";
 import { LEVEL_1 } from "../runner/level1";
+import {
+  buildBlockSprite,
+  buildGrassPlatform,
+  createParallaxLayers,
+  registerHeroAnimations,
+  registerMapleAssets
+} from "../runner/mapleAssets";
 
 type RunStatus = "playing" | "won" | "lost";
 
@@ -13,7 +20,7 @@ type ActiveBlock = RunnerBlock & {
 
 type ActiveBridge = {
   platform: RunnerPlatform;
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Container;
   expireAt: number;
 };
 
@@ -23,9 +30,9 @@ export class RunnerScene extends Phaser.Scene {
   private readonly playerName = `冒险家${Math.floor(Math.random() * 900 + 100)}`;
 
   private world?: Phaser.GameObjects.Container;
-  private playerContainer?: Phaser.GameObjects.Container;
+  private parallax?: ReturnType<typeof createParallaxLayers>;
+  private playerSprite?: Phaser.GameObjects.Sprite;
   private hud?: Phaser.GameObjects.Text;
-  private help?: Phaser.GameObjects.Text;
   private resultText?: Phaser.GameObjects.Text;
 
   private playerX = 80;
@@ -41,12 +48,11 @@ export class RunnerScene extends Phaser.Scene {
   private startedAt = 0;
   private scrollX = 0;
 
-  private platformSprites: Phaser.GameObjects.Rectangle[] = [];
-  private obstacleSprites: Phaser.GameObjects.Rectangle[] = [];
   private blocks: ActiveBlock[] = [];
   private bridges: ActiveBridge[] = [];
   private goalSprite?: Phaser.GameObjects.Container;
   private shieldAura?: Phaser.GameObjects.Arc;
+  private obstacleSprites: Phaser.GameObjects.Image[] = [];
 
   private cameraOverlay?: HTMLElement | null;
   private cameraFeed?: HTMLVideoElement | null;
@@ -59,11 +65,25 @@ export class RunnerScene extends Phaser.Scene {
     super("runner");
   }
 
+  preload() {
+    registerMapleAssets(this);
+  }
+
   async create() {
-    this.cameras.main.setBackgroundColor("rgba(0,0,0,0)");
+    registerHeroAnimations(this);
+    this.cameras.main.setBackgroundColor("#38bdf8");
     this.startedAt = performance.now();
 
     this.world = this.add.container(0, 0);
+    this.parallax = createParallaxLayers(this, this.level.length);
+    this.world.add([
+      this.parallax.sky,
+      this.parallax.hills,
+      this.parallax.cloudA,
+      this.parallax.cloudB,
+      this.parallax.cloudC
+    ]);
+
     this.buildLevel();
     this.buildPlayer();
     this.buildHud();
@@ -79,15 +99,15 @@ export class RunnerScene extends Phaser.Scene {
       this.room = await client.joinOrCreate("gift-box-battle", { name: this.playerName });
       this.room.onMessage("gift:applied", () => this.applyShield());
     } catch {
-      this.showToast("离线模式：礼物快捷键仍可用");
+      this.showToast("离线模式：1架桥 2护盾");
     }
 
     await this.setupCameraPreview();
-    this.showToast("自动前进！跳起来过坑、顶砖块、到达终点");
+    this.showToast("自动前进！摄像头起跳或 Space");
   }
 
   update(_time: number, delta: number) {
-    if (!this.world || !this.playerContainer) {
+    if (!this.world || !this.playerSprite) {
       return;
     }
 
@@ -101,8 +121,22 @@ export class RunnerScene extends Phaser.Scene {
 
     this.scrollX = this.playerX - RUNNER_CONFIG.playerScreenX;
     this.world.x = -this.scrollX;
-    this.playerContainer.setPosition(this.playerX, this.playerY);
+    this.playerSprite.setPosition(this.playerX, this.playerY + RUNNER_CONFIG.playerHeight);
     this.shieldAura?.setPosition(this.playerX + RUNNER_CONFIG.playerWidth / 2, this.playerY + RUNNER_CONFIG.playerHeight / 2);
+
+    if (this.parallax) {
+      this.parallax.hills.tilePositionX = this.scrollX * 0.35;
+      this.parallax.cloudA.x = 200 + this.scrollX * 0.15;
+      this.parallax.cloudB.x = 900 + this.scrollX * 0.22;
+      this.parallax.cloudC.x = 1800 + this.scrollX * 0.18;
+    }
+
+    if (this.grounded && this.playerSprite.anims.currentAnim?.key !== "ms-run") {
+      this.playerSprite.play("ms-run", true);
+    } else if (!this.grounded && this.playerSprite.anims.currentAnim?.key !== "ms-jump") {
+      this.playerSprite.play("ms-jump", true);
+    }
+
     this.updateHud();
   }
 
@@ -113,35 +147,21 @@ export class RunnerScene extends Phaser.Scene {
   }
 
   private buildHud() {
-    this.hud = this.add.text(20, 20, "", {
+    this.hud = this.add.text(10, 8, "", {
       fontFamily: "Arial",
-      fontSize: "18px",
-      color: "#f8fafc",
-      stroke: "#020617",
-      strokeThickness: 4
-    }).setDepth(100);
+      fontSize: "13px",
+      color: "#14532d",
+      backgroundColor: "#fef9c3cc",
+      padding: { left: 8, right: 8, top: 4, bottom: 4 }
+    }).setDepth(100).setScrollFactor(0);
 
-    this.help = this.add.text(20, 52, [
-      "冒险岛式闯关 MVP",
-      "角色自动前进，摄像头起跳或按 Space 跳跃",
-      "顶砖块拿金币，躲障碍，到达终点旗通关",
-      `礼物/调试：1 架桥  2 护盾  (${RUNNER_RULES.giftBridge})`
-    ], {
+    this.resultText = this.add.text(RUNNER_CONFIG.viewportWidth / 2, 70, "", {
       fontFamily: "Arial",
-      fontSize: "14px",
-      color: "#cbd5e1",
-      lineSpacing: 8,
-      stroke: "#020617",
-      strokeThickness: 3
-    }).setDepth(100);
-
-    this.resultText = this.add.text(RUNNER_CONFIG.viewportWidth / 2, 120, "", {
-      fontFamily: "Arial",
-      fontSize: "34px",
+      fontSize: "26px",
       color: "#fef08a",
       stroke: "#7c2d12",
       strokeThickness: 5
-    }).setOrigin(0.5).setDepth(101);
+    }).setOrigin(0.5).setDepth(101).setScrollFactor(0);
   }
 
   private buildLevel() {
@@ -149,48 +169,36 @@ export class RunnerScene extends Phaser.Scene {
       return;
     }
 
-    const skyBand = this.add.rectangle(this.level.length / 2, 120, this.level.length, 240, 0x0f172a, 0.18);
-    this.world.add(skyBand);
-
     for (const platform of this.level.platforms) {
-      const height = platform.height ?? RUNNER_CONFIG.viewportHeight - platform.y;
-      const rect = this.add.rectangle(
-        platform.x + platform.width / 2,
-        platform.y + height / 2,
-        platform.width,
-        height,
-        0x166534,
-        0.92
-      );
-      rect.setStrokeStyle(3, 0x4ade80, 0.8);
-      const top = this.add.rectangle(platform.x + platform.width / 2, platform.y, platform.width, 10, 0x86efac, 1);
-      this.world.add([rect, top]);
-      this.platformSprites.push(rect);
+      this.world.add(buildGrassPlatform(this, platform));
     }
 
     for (const obstacle of this.level.obstacles) {
-      const color = obstacle.kind === "spike" ? 0xef4444 : 0xb45309;
-      const rect = this.add.rectangle(
+      const key = obstacle.kind === "spike" ? "ms-spike" : "ms-stump";
+      const img = this.add.image(
         obstacle.x + obstacle.width / 2,
         obstacle.y + obstacle.height / 2,
-        obstacle.width,
-        obstacle.height,
-        color,
-        1
+        key
       );
-      rect.setStrokeStyle(2, 0x7f1d1d, 1);
-      this.world.add(rect);
-      this.obstacleSprites.push(rect);
+      if (obstacle.kind === "low") {
+        img.setScale(1.1);
+      }
+      this.world.add(img);
+      this.obstacleSprites.push(img);
     }
 
     for (const block of this.level.blocks) {
-      const sprite = this.createBlockSprite(block);
+      const sprite = buildBlockSprite(this, block.reward);
+      sprite.setPosition(block.x, block.y);
       this.world.add(sprite);
       this.blocks.push({ ...block, sprite, broken: false });
     }
 
-    this.goalSprite = this.createGoalSprite(this.level.goalX);
+    const flag = this.add.image(0, -44, "ms-flag");
+    const glow = this.add.circle(0, 0, 28, 0xfef08a, 0.35);
+    this.goalSprite = this.add.container(this.level.goalX, RUNNER_CONFIG.groundY - 8, [glow, flag]);
     this.world.add(this.goalSprite);
+    this.tweens.add({ targets: glow, scale: 1.2, alpha: 0.15, duration: 900, yoyo: true, repeat: -1 });
   }
 
   private buildPlayer() {
@@ -198,45 +206,15 @@ export class RunnerScene extends Phaser.Scene {
       return;
     }
 
-    const body = this.add.rectangle(0, 18, 30, 34, 0x60a5fa, 1);
-    body.setStrokeStyle(2, 0x1d4ed8, 1);
-    const head = this.add.circle(0, -8, 12, 0xfcd34d, 1);
-    head.setStrokeStyle(2, 0xb45309, 1);
-    const eye = this.add.circle(4, -10, 2, 0x111827, 1);
-    const bootL = this.add.rectangle(-8, 34, 12, 8, 0x7c2d12, 1);
-    const bootR = this.add.rectangle(8, 34, 12, 8, 0x7c2d12, 1);
-
-    this.playerContainer = this.add.container(this.playerX, this.playerY, [bootL, bootR, body, head, eye]);
-    this.world.add(this.playerContainer);
+    this.playerSprite = this.add.sprite(this.playerX, this.playerY + RUNNER_CONFIG.playerHeight, "ms-hero-run-0");
+    this.playerSprite.setOrigin(0.5, 1);
+    this.playerSprite.play("ms-run");
+    this.world.add(this.playerSprite);
 
     this.shieldAura = this.add.circle(0, 0, 34, 0x38bdf8, 0.22);
     this.shieldAura.setStrokeStyle(3, 0x7dd3fc, 0.8);
     this.shieldAura.setVisible(false);
     this.world.add(this.shieldAura);
-  }
-
-  private createBlockSprite(block: RunnerBlock) {
-    const fill = block.reward === "star" ? 0xfbbf24 : 0xea580c;
-    const body = this.add.rectangle(0, 0, 44, 44, fill, 1);
-    body.setStrokeStyle(3, 0x7c2d12, 1);
-    const mark = this.add.text(0, 0, block.reward === "star" ? "★" : "?", {
-      fontFamily: "Arial",
-      fontSize: "22px",
-      color: "#fff7ed"
-    }).setOrigin(0.5);
-    return this.add.container(block.x, block.y, [body, mark]);
-  }
-
-  private createGoalSprite(goalX: number) {
-    const pole = this.add.rectangle(0, -70, 8, 140, 0xe2e8f0, 1);
-    const flag = this.add.triangle(24, -118, 0, -20, 48, 0, 0, 20, 0x22c55e, 1);
-    const base = this.add.rectangle(0, 0, 60, 12, 0x94a3b8, 1);
-    const label = this.add.text(0, -150, "终点", {
-      fontFamily: "Arial",
-      fontSize: "18px",
-      color: "#fef08a"
-    }).setOrigin(0.5);
-    return this.add.container(goalX, RUNNER_CONFIG.groundY - 6, [base, pole, flag, label]);
   }
 
   private simulate(dt: number) {
@@ -260,7 +238,7 @@ export class RunnerScene extends Phaser.Scene {
           playerBox.right > left + 4 &&
           playerBox.left < right - 4 &&
           feet >= top &&
-          prevFeet <= top + 8
+          prevFeet <= top + 10
         ) {
           this.playerY = top - RUNNER_CONFIG.playerHeight;
           this.vy = 0;
@@ -275,8 +253,8 @@ export class RunnerScene extends Phaser.Scene {
       this.lastGroundedAt = now;
     }
 
-    if (this.playerY > RUNNER_CONFIG.viewportHeight + 80) {
-      this.lose("掉进坑里啦！按 R 重开");
+    if (this.playerY > RUNNER_CONFIG.viewportHeight + 60) {
+      this.lose("掉进坑里！按 R 重开");
       return;
     }
 
@@ -285,8 +263,7 @@ export class RunnerScene extends Phaser.Scene {
   }
 
   private getSolidPlatforms(): RunnerPlatform[] {
-    const bridges = this.bridges.map((bridge) => bridge.platform);
-    return [...this.level.platforms, ...bridges];
+    return [...this.level.platforms, ...this.bridges.map((b) => b.platform)];
   }
 
   private getPlayerBox() {
@@ -308,22 +285,17 @@ export class RunnerScene extends Phaser.Scene {
         continue;
       }
 
-      const left = block.x - 22;
-      const right = block.x + 22;
-      const bottom = block.y + 22;
-      const top = block.y - 22;
+      const left = block.x - 24;
+      const right = block.x + 24;
+      const bottom = block.y + 24;
+      const top = block.y - 24;
       const head = playerBox.top;
       const prevHead = head - this.vy * (1 / 60);
 
-      if (
-        playerBox.right > left &&
-        playerBox.left < right &&
-        head <= bottom &&
-        prevHead >= bottom - 6
-      ) {
+      if (playerBox.right > left && playerBox.left < right && head <= bottom && prevHead >= bottom - 8) {
         this.breakBlock(block);
         this.playerY = bottom;
-        this.vy = 120;
+        this.vy = 140;
       } else if (playerBox.right > left && playerBox.left < right && head < top && playerBox.bottom > bottom) {
         this.playerY = bottom;
         this.vy = 0;
@@ -332,19 +304,28 @@ export class RunnerScene extends Phaser.Scene {
   }
 
   private breakBlock(block: ActiveBlock) {
-    if (block.broken) {
-      return;
-    }
     block.broken = true;
     this.coins += block.reward === "star" ? 5 : 1;
-    this.showToast(block.reward === "star" ? "顶到星星砖！+5" : "顶到金币砖！+1");
+    this.showToast(block.reward === "star" ? "★ 顶到星星砖 +5" : "? 顶到金币砖 +1");
+    this.cameras.main.shake(80, 0.004);
+
+    const coin = this.add.image(block.x, block.y, "ms-coin").setDepth(50);
+    this.tweens.add({
+      targets: coin,
+      y: block.y - 40,
+      alpha: 0,
+      scale: 1.4,
+      duration: 420,
+      onComplete: () => coin.destroy()
+    });
+
     this.tweens.add({
       targets: block.sprite,
-      y: block.sprite.y - 18,
+      y: block.sprite.y - 16,
       alpha: 0,
-      scaleX: 0.7,
-      scaleY: 0.7,
-      duration: 260,
+      scaleX: 0.6,
+      scaleY: 0.6,
+      duration: 220,
       onComplete: () => block.sprite.setVisible(false)
     });
   }
@@ -361,7 +342,7 @@ export class RunnerScene extends Phaser.Scene {
         top: obstacle.y,
         bottom: obstacle.y + obstacle.height
       })) {
-        this.lose(obstacle.kind === "spike" ? "碰到尖刺！按 R 重开" : "撞上障碍！按 R 重开");
+        this.lose(obstacle.kind === "spike" ? "碰到尖刺！按 R 重开" : "撞上木桩！按 R 重开");
         return;
       }
     }
@@ -391,8 +372,8 @@ export class RunnerScene extends Phaser.Scene {
       return;
     }
     this.status = "won";
-    this.resultText?.setText("通关成功！");
-    this.showToast(`到达终点，金币 ${this.coins}`);
+    this.resultText?.setText("🎉 通关成功");
+    this.showToast(`到达终点！金币 ${this.coins}`);
     this.cameras.main.flash(500, 120, 220, 120, false);
     this.input.keyboard?.once("keydown-R", () => this.scene.restart());
   }
@@ -411,7 +392,6 @@ export class RunnerScene extends Phaser.Scene {
     const now = performance.now();
     const jumpEdge = this.cameraJumpDown && !this.prevJumpDown;
     this.prevJumpDown = this.cameraJumpDown;
-
     if (jumpEdge) {
       this.bufferJump();
     }
@@ -422,8 +402,8 @@ export class RunnerScene extends Phaser.Scene {
       this.vy = -RUNNER_CONFIG.jumpVelocity;
       this.grounded = false;
       this.jumpBufferedAt = 0;
-      this.playerContainer?.setScale(1.04, 0.94);
-      this.time.delayedCall(90, () => this.playerContainer?.setScale(1, 1));
+      this.playerSprite?.setScale(1.06, 0.94);
+      this.time.delayedCall(90, () => this.playerSprite?.setScale(1, 1));
     }
   }
 
@@ -434,10 +414,10 @@ export class RunnerScene extends Phaser.Scene {
   private async triggerGift(kind: "bridge" | "shield") {
     if (kind === "bridge") {
       this.spawnBridge();
-      this.showToast("礼物生效：前方生成临时桥");
+      this.showToast("🌉 礼物架桥");
     } else {
       this.applyShield();
-      this.showToast("礼物生效：护盾 3 秒");
+      this.showToast("🛡️ 礼物护盾");
     }
 
     if (!this.room) {
@@ -460,22 +440,14 @@ export class RunnerScene extends Phaser.Scene {
   }
 
   private spawnBridge() {
-    const startX = this.playerX + 180;
     const platform: RunnerPlatform = {
-      x: startX,
+      x: this.playerX + 160,
       y: RUNNER_CONFIG.groundY,
-      width: 220,
+      width: 200,
       height: 24
     };
-    const sprite = this.add.rectangle(
-      platform.x + platform.width / 2,
-      platform.y + 12,
-      platform.width,
-      24,
-      0x38bdf8,
-      0.95
-    );
-    sprite.setStrokeStyle(3, 0x0ea5e9, 1);
+    const sprite = buildGrassPlatform(this, platform);
+    sprite.setAlpha(0.95);
     this.world?.add(sprite);
     this.bridges.push({
       platform,
@@ -511,15 +483,8 @@ export class RunnerScene extends Phaser.Scene {
   private updateHud() {
     const elapsed = Math.floor((performance.now() - this.startedAt) / 1000);
     const timeLeft = Math.max(0, Math.ceil(RUNNER_CONFIG.roundDurationMs / 1000) - elapsed);
-    const shieldLeft = Math.max(0, Math.ceil((this.shieldUntil - performance.now()) / 1000));
-    this.hud?.setText([
-      `关卡: ${this.level.name}`,
-      `进度: ${Math.min(100, Math.round((this.playerX / this.level.goalX) * 100))}%`,
-      `金币: ${this.coins}`,
-      `剩余时间: ${timeLeft}s`,
-      `摄像头: ${this.cameraCalibrated ? (this.cameraJumpDown ? "起跳中" : "已就绪") : "校准中"}`,
-      `护盾: ${shieldLeft > 0 ? `${shieldLeft}s` : "无"}`
-    ]);
+    const progress = Math.min(100, Math.round((this.playerX / this.level.goalX) * 100));
+    this.hud?.setText(`🍁${this.level.name}  ${progress}%  💰${this.coins}  ⏱${timeLeft}s  ${this.cameraJumpDown ? "起跳!" : "跑"}`);
   }
 
   private async setupCameraPreview() {
@@ -530,14 +495,14 @@ export class RunnerScene extends Phaser.Scene {
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.cameraOverlay.textContent = "当前浏览器不支持摄像头，可用 Space 跳跃";
+      this.cameraOverlay.textContent = "无摄像头 · 用 Space 跳跃";
       return;
     }
 
     try {
-      this.cameraOverlay.textContent = "正在连接摄像头...";
+      this.cameraOverlay.textContent = "连接摄像头...";
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+        video: { width: { ideal: 720 }, height: { ideal: 1280 }, facingMode: "user" },
         audio: false
       });
       this.cameraFeed.srcObject = this.mediaStream;
@@ -553,27 +518,27 @@ export class RunnerScene extends Phaser.Scene {
         }
       });
       await this.poseJumpController.start(this.cameraFeed);
-      this.cameraOverlay.textContent = "摄像头就绪：跳起来闯关！";
+      this.cameraOverlay.textContent = "跳起来！顶砖块、过障碍、冲终点";
     } catch (error) {
-      this.cameraOverlay.textContent = "摄像头不可用，可用 Space 跳跃";
-      this.showToast(`摄像头启动失败: ${(error as Error).message}`);
+      this.cameraOverlay.textContent = "摄像头不可用 · Space 跳跃";
+      this.showToast(`摄像头失败: ${(error as Error).message}`);
     }
   }
 
   private showToast(message: string) {
-    const text = this.add.text(RUNNER_CONFIG.viewportWidth / 2, 170, message, {
+    const text = this.add.text(RUNNER_CONFIG.viewportWidth / 2, 36, message, {
       fontFamily: "Arial",
-      fontSize: "20px",
+      fontSize: "15px",
       color: "#fef08a",
       backgroundColor: "#7f1d1dcc",
-      padding: { left: 14, right: 14, top: 8, bottom: 8 }
-    }).setOrigin(0.5).setDepth(120);
+      padding: { left: 10, right: 10, top: 5, bottom: 5 }
+    }).setOrigin(0.5).setDepth(120).setScrollFactor(0);
 
     this.tweens.add({
       targets: text,
-      y: 130,
+      y: 24,
       alpha: 0,
-      duration: 1400,
+      duration: 1200,
       ease: "Quad.easeOut",
       onComplete: () => text.destroy()
     });

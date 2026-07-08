@@ -3,34 +3,34 @@ import { RUNNER_CONFIG, type RunnerLevel } from "@douyin-game/shared";
 const G = RUNNER_CONFIG.groundY;
 
 export const LEVEL_1: RunnerLevel = {
-  id: "forest-1",
-  name: "森林试炼",
-  length: 4200,
+  id: "maple-forest-1",
+  name: "彩虹村外 · 试炼小道",
+  length: 3800,
   platforms: [
-    { x: 0, y: G, width: 900 },
-    { x: 1080, y: G, width: 520 },
-    { x: 1760, y: G, width: 420 },
-    { x: 2320, y: G, width: 360 },
-    { x: 2840, y: G, width: 520 },
-    { x: 3520, y: G, width: 760 },
-    { x: 1260, y: G - 88, width: 180 },
-    { x: 1980, y: G - 120, width: 220 },
-    { x: 2580, y: G - 96, width: 180 }
+    { x: 0, y: G, width: 760 },
+    { x: 940, y: G, width: 460 },
+    { x: 1540, y: G, width: 380 },
+    { x: 2060, y: G, width: 320 },
+    { x: 2520, y: G, width: 460 },
+    { x: 3120, y: G, width: 760 },
+    { x: 1120, y: G - 72, width: 160 },
+    { x: 1680, y: G - 96, width: 180 },
+    { x: 2240, y: G - 80, width: 150 }
   ],
   obstacles: [
-    { x: 760, y: G - 42, width: 34, height: 42, kind: "low" },
-    { x: 1420, y: G - 42, width: 34, height: 42, kind: "low" },
-    { x: 2140, y: G - 42, width: 34, height: 42, kind: "low" },
-    { x: 3060, y: G - 28, width: 28, height: 28, kind: "spike" },
-    { x: 3320, y: G - 28, width: 28, height: 28, kind: "spike" }
+    { x: 640, y: G - 40, width: 36, height: 40, kind: "low" },
+    { x: 1280, y: G - 40, width: 36, height: 40, kind: "low" },
+    { x: 1880, y: G - 40, width: 36, height: 40, kind: "low" },
+    { x: 2720, y: G - 26, width: 30, height: 26, kind: "spike" },
+    { x: 2940, y: G - 26, width: 30, height: 26, kind: "spike" }
   ],
   blocks: [
-    { x: 520, y: G - 150, reward: "coin" },
-    { x: 680, y: G - 150, reward: "coin" },
-    { x: 1320, y: G - 238, reward: "star" },
-    { x: 2040, y: G - 270, reward: "coin" },
-    { x: 2640, y: G - 246, reward: "coin" },
-    { x: 3180, y: G - 150, reward: "star" }
+    { x: 420, y: G - 138, reward: "coin" },
+    { x: 560, y: G - 138, reward: "coin" },
+    { x: 1180, y: G - 210, reward: "star" },
+    { x: 1760, y: G - 234, reward: "coin" },
+    { x: 2320, y: G - 214, reward: "coin" },
+    { x: 2860, y: G - 138, reward: "star" }
   ],
-  goalX: 4050
+  goalX: 3650
 };

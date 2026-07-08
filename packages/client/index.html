@@ -2,34 +2,56 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>抖音直播间盒子大战</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>冒险岛直播闯关</title>
     <style>
-      html, body, #app {
+      :root {
+        --shell-w: 430px;
+        --shell-h: 932px;
+        --camera-ratio: 50%;
+        --game-ratio: 35%;
+        --danmu-ratio: 15%;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
         margin: 0;
         width: 100%;
         height: 100%;
-        background: #020617;
+        background: radial-gradient(circle at top, #1e293b 0%, #020617 70%);
         overflow: hidden;
+        font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
       }
 
-      #app {
-        position: relative;
-      }
-
-      #camera-layer,
-      #game-layer {
-        position: absolute;
-        inset: 0;
-      }
-
-      #camera-layer {
+      #page {
+        width: 100%;
+        height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-        background:
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.1), rgba(15, 23, 42, 0.5)),
-          #0f172a;
+      }
+
+      /* 竖屏直播间壳：类似手机 + 手指钢琴条 */
+      #phone-shell {
+        position: relative;
+        width: min(var(--shell-w), 100vw);
+        height: min(var(--shell-h), 100vh);
+        border-radius: 28px;
+        overflow: hidden;
+        border: 2px solid rgba(148, 163, 184, 0.35);
+        box-shadow: 0 24px 80px rgba(2, 6, 23, 0.65);
+        background: #0f172a;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* 上半：主播画面 */
+      #live-stage {
+        position: relative;
+        flex: 0 0 var(--camera-ratio);
+        background: linear-gradient(180deg, #0c4a6e 0%, #082f49 100%);
+        overflow: hidden;
       }
 
       #camera-feed {
@@ -37,36 +59,130 @@
         height: 100%;
         object-fit: cover;
         transform: scaleX(-1);
-        opacity: 0.9;
+      }
+
+      #live-badge {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: #fff;
+        background: rgba(239, 68, 68, 0.88);
+        letter-spacing: 0.5px;
       }
 
       #camera-overlay {
         position: absolute;
-        top: 16px;
-        right: 16px;
-        padding: 10px 14px;
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        padding: 10px 12px;
         border-radius: 14px;
-        font-family: Arial, sans-serif;
-        font-size: 14px;
-        color: #f8fafc;
-        background: rgba(15, 23, 42, 0.7);
+        font-size: 13px;
+        color: #e2e8f0;
+        background: rgba(15, 23, 42, 0.72);
         backdrop-filter: blur(8px);
+        line-height: 1.45;
       }
 
-      canvas {
+      /* 中间：游戏条（手指钢琴式，能看见也能玩） */
+      #game-band {
         position: relative;
-        z-index: 1;
+        flex: 0 0 var(--game-ratio);
+        background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 38%, #0ea5e9 100%);
+        border-top: 3px solid #fef08a;
+        border-bottom: 3px solid #166534;
+      }
+
+      #game-band-label {
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #14532d;
+        background: rgba(254, 240, 138, 0.95);
+        letter-spacing: 1px;
+        pointer-events: none;
+      }
+
+      #game-stage {
+        position: absolute;
+        inset: 0;
+      }
+
+      #game-stage canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+
+      /* 底部：弹幕/礼物安全区（游戏不占用） */
+      #danmu-safe-zone {
+        flex: 0 0 var(--danmu-ratio);
+        position: relative;
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.15), rgba(2, 6, 23, 0.92));
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 8px 12px 12px;
+        pointer-events: none;
+      }
+
+      #danmu-safe-zone .hint {
+        font-size: 11px;
+        color: rgba(226, 232, 240, 0.55);
+        margin-bottom: 6px;
+      }
+
+      .fake-danmu {
+        font-size: 13px;
+        color: #f8fafc;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        margin-bottom: 4px;
+        opacity: 0.75;
+      }
+
+      .fake-gift {
+        align-self: flex-start;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: #fef08a;
+        background: rgba(127, 29, 29, 0.55);
+        border: 1px solid rgba(251, 191, 36, 0.4);
       }
     </style>
   </head>
   <body>
-    <div id="app">
-      <div id="camera-layer">
-        <video id="camera-feed" autoplay playsinline muted></video>
-        <div id="camera-overlay">摄像头未连接</div>
+    <div id="page">
+      <div id="phone-shell">
+        <section id="live-stage">
+          <video id="camera-feed" autoplay playsinline muted></video>
+          <div id="live-badge">直播中</div>
+          <div id="camera-overlay">摄像头未连接 · 跳起来控制角色</div>
+        </section>
+
+        <section id="game-band">
+          <div id="game-band-label">▶ 冒险岛闯关条</div>
+          <div id="game-stage"></div>
+        </section>
+
+        <section id="danmu-safe-zone">
+          <div class="hint">底部为直播间弹幕 / 礼物区（游戏不遮挡）</div>
+          <div class="fake-danmu">观众A：主播跳！</div>
+          <div class="fake-danmu">观众B：架桥架桥！</div>
+          <div class="fake-gift">🎁 玫瑰 x1 → 生成跳板</div>
+        </section>
       </div>
-      <div id="game-layer"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
-  </html>
+</html>

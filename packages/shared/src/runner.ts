@@ -1,15 +1,24 @@
+/** 直播间竖屏壳层比例：上摄像头 / 中游戏 / 下弹幕礼物安全区 */
+export const LIVE_LAYOUT = {
+  shellWidth: 430,
+  shellHeight: 932,
+  cameraRatio: 0.5,
+  gameRatio: 0.35,
+  danmuSafeRatio: 0.15
+} as const;
+
 export const RUNNER_CONFIG = {
-  viewportWidth: 1280,
-  viewportHeight: 720,
-  groundY: 580,
-  runSpeed: 240,
-  jumpVelocity: 700,
-  gravity: 1900,
-  coyoteTimeMs: 120,
-  jumpBufferMs: 160,
-  playerWidth: 38,
-  playerHeight: 54,
-  playerScreenX: 280,
+  viewportWidth: 720,
+  viewportHeight: 400,
+  groundY: 332,
+  runSpeed: 210,
+  jumpVelocity: 640,
+  gravity: 1850,
+  coyoteTimeMs: 130,
+  jumpBufferMs: 170,
+  playerWidth: 44,
+  playerHeight: 56,
+  playerScreenX: 190,
   roundDurationMs: 90_000,
   shieldDurationMs: 3000,
   bridgeDurationMs: 6000
@@ -48,6 +57,7 @@ export type RunnerLevel = {
 
 export const RUNNER_RULES = {
   winCondition: "reach-goal-before-timeout",
+  layout: "portrait-live-camera-top-game-middle-danmu-bottom",
   controls: "camera-jump-or-space",
   giftBridge: "Digit1 / rose gift",
   giftShield: "Digit2 / heart gift"

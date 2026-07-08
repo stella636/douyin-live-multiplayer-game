@@ -4,16 +4,15 @@
 
 ## 当前能力
 
-- 冒险岛式横版闯关 MVP（`feature/runner-mvp` 分支）
-  - 角色自动前进
-  - 摄像头起跳 / `Space` 跳跃
-  - 平台、坑、低障碍、尖刺、顶砖块、终点旗
+- **竖屏直播间布局**（上摄像头 / 中游戏条 / 下弹幕礼物安全区）
+- **冒险岛风横版闯关 MVP**（`feature/runner-mvp`）
+  - 像素草地平台、砖块、Q 版角色、视差背景
+  - 自动前进 + 摄像头起跳 / Space 跳跃
+  - 顶砖块、过障碍、终点旗通关
   - 礼物调试：`1` 架桥、`2` 护盾
-- 2 到 8 人多人房间（旧版礼盒玩法，`GameScene` 保留）
-- Phaser H5 客户端
-- 权威房间服同步玩家位置与盒子数量
-- 模拟礼物接口
-- 预留真实抖音礼物接入层
+- 旧版礼盒玩法（`GameScene` 保留）
+- Colyseus 房间服 + 模拟礼物接口
+- 抖音直播接入要求文档：`docs/douyin-live-setup.md`
 
 ## 目录结构
 
@@ -21,6 +20,7 @@
 - `packages/server`：Colyseus 房间服与直播接入层
 - `packages/shared`：共享配置与事件定义
 - `docs/oss-references.md`：参考的开源项目清单
+- `docs/douyin-live-setup.md`：抖音直播间搭建与接入要求
 
 ## 本地运行
 

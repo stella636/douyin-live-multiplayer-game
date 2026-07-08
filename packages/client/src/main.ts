@@ -4,11 +4,15 @@ import { RunnerScene } from "./scenes/RunnerScene";
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  parent: "game-layer",
+  parent: "game-stage",
   width: RUNNER_CONFIG.viewportWidth,
   height: RUNNER_CONFIG.viewportHeight,
-  backgroundColor: "rgba(0,0,0,0)",
-  transparent: true,
+  backgroundColor: "#38bdf8",
+  transparent: false,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
   scene: [RunnerScene]
 });
 
