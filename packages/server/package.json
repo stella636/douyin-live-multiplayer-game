@@ -1,0 +1,24 @@
+{
+  "name": "@douyin-game/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.16.11",
+    "@colyseus/schema": "^3.0.35",
+    "@colyseus/ws-transport": "^0.16.5",
+    "@douyin-game/shared": "0.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.3",
+    "typescript": "^5.8.3"
+  }
+}
